@@ -5,7 +5,7 @@ A complete medical AI system for X-ray lung disease classification with web inte
 ## 🚀 Features
 
 - **AI-Powered Diagnosis**: 97% accurate lung disease classification
-- **Web Interface**: Beautiful, responsive UI for image upload
+- **Interactive API Docs**: Swagger UI at `/docs` and ReDoc at `/redoc`
 - **Database Storage**: MongoDB with Beanie ORM for prediction history
 - **REST API**: Full API for integration with other systems
 - **User Management**: Track user predictions and statistics
@@ -65,9 +65,21 @@ sudo systemctl start mongodb
 
 Create `.env` file:
 ```env
+# Database
 MONGODB_URL=mongodb://localhost:27017
-DATABASE_NAME=medical_ai
+DATABASE_NAME=medical_ai_db
+
+# Model
 MODEL_PATH=best_lung_disease_model.h5
+
+# Auth (change in production)
+JWT_SECRET=change-me-in-prod
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+# File storage
+UPLOAD_DIR=uploads
+
+# Server
 HOST=0.0.0.0
 PORT=8000
 ENVIRONMENT=development
@@ -85,8 +97,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ### 5. Access the Application
 
-- **Web Interface**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
+- **API Root (info)**: http://localhost:8000/
+- **API Documentation (Swagger UI)**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
 - **Health Check**: http://localhost:8000/health
 
 ## 📁 Project Structure
@@ -94,34 +107,43 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 medicale-ai-backend/
 ├── app/
-│   ├── main.py                   # FastAPI application
-│   ├── config.py                 # Env configuration
+│   ├── main.py                     # FastAPI application (routes & startup)
+│   ├── config.py                   # Environment configuration
 │   ├── db/
-│   │   └── database.py           # Mongo/Beanie init
+│   │   └── database.py             # MongoDB (Motor) + Beanie initialization
 │   ├── models/
-│   │   └── models.py             # Beanie + Pydantic models
+│   │   └── models.py               # Beanie Documents + Pydantic schemas
 │   └── services/
-│       └── ml_model.py           # ML predictor service
-├── main.py                       # Thin launcher (imports app.main:app)
-├── models.py                     # Back-compat shim → app/models/models.py
-├── ml_model.py                   # Back-compat shim → app/services/ml_model.py
-├── database.py                   # Back-compat shim → app/db/database.py
-├── static/                       # Static files
-├── requirements.txt              # Python dependencies
-└── best_lung_disease_model.h5    # Trained model
+│       ├── ml_model.py             # ML predictor service
+│       └── security.py             # Password hashing & JWT token
+├── main.py                         # Thin launcher (imports app.main:app)
+├── models.py                       # Back-compat shim → app/models/models.py
+├── ml_model.py                     # Back-compat shim → app/services/ml_model.py
+├── database.py                     # Back-compat shim → app/db/database.py
+├── API_ENDPOINTS.md                # Detailed API reference
+├── class9.py                       # Training script to generate the model .h5
+├── static/                         # Static files (optional)
+├── uploads/                        # Saved uploaded images
+├── requirements.txt                # Python dependencies
+└── best_lung_disease_model.h5      # Trained model (place here after training)
 ```
 
 ## 🔧 API Endpoints
 
-### Core Endpoints
+See `API_ENDPOINTS.md` for full details. Key routes:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/` | Web interface |
-| `POST` | `/predict` | Upload X-ray for analysis |
-| `GET` | `/health` | System health check |
-| `GET` | `/stats` | System statistics |
-| `GET` | `/user/{email}/stats` | User statistics |
+| `GET`  | `/`                               | API info JSON |
+| `POST` | `/predict`                        | Upload X-ray for analysis |
+| `GET`  | `/predictions`                    | List predictions (optional `email`, `skip`, `limit`) |
+| `GET`  | `/user/{email}/predictions`       | List predictions for a user |
+| `GET`  | `/predictions/{id}/image`         | Download uploaded image for a prediction |
+| `GET`  | `/health`                         | System health check |
+| `GET`  | `/stats`                          | System statistics |
+| `GET`  | `/user/{email}/stats`             | User statistics |
+| `POST` | `/auth/register`                  | Register user, returns JWT |
+| `POST` | `/auth/login`                     | Login user, returns JWT |
 
 ### Example API Usage
 
@@ -136,23 +158,54 @@ curl -X POST "http://localhost:8000/predict" \
 # Get system stats
 curl "http://localhost:8000/stats"
 
-# Get user stats
-curl "http://localhost:8000/user/john@example.com/stats"
+# List predictions (latest 50)
+curl "http://localhost:8000/predictions"
+
+# List predictions for a user
+curl "http://localhost:8000/user/john@example.com/predictions?limit=10"
+
+# Register user
+curl -X POST "http://localhost:8000/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John Doe","email":"john@example.com","password":"Secret123!"}'
+
+# Login user
+curl -X POST "http://localhost:8000/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com","password":"Secret123!"}'
 ```
+
+## 🧠 Train the model (optional)
+
+Use `class9.py` to train and generate `best_lung_disease_model.h5`.
+
+```bash
+cd /home/asif-ahammed/Documents/medical-ai/medicale-ai-backend
+source venv/bin/activate  # if not already active
+python class9.py
+```
+
+Outputs:
+- `best_lung_disease_model.h5` (at project root)
+- `training_history.png`, `confusion_matrix.png`
+
+Notes:
+- The script downloads the dataset via KaggleHub; ensure internet access and sufficient disk space.
+- If you place the model elsewhere, set `MODEL_PATH` in `.env` accordingly.
 
 ## 🏥 Disease Classes
 
 The model can classify 9 different lung conditions:
 
-1. **00 Anatomia Normal** - Normal anatomy
-2. **01 Processos Inflamatórios Pulmonares** - Pneumonia
-3. **02 Maior Densidade** - Pleural effusion, consolidation, etc.
-4. **03 Menor Densidade** - Pneumothorax, pneumomediastinum, etc.
-5. **04 Doenças Pulmonares Obstrutivas** - Emphysema, bronchopneumonia, etc.
-6. **05 Doenças Infecciosas Degenerativas** - Tuberculosis, sarcoidosis, etc.
-7. **06 Lesões Encapsuladas** - Abscesses, nodules, tumors, metastases
-8. **07 Alterações de Mediastino** - Pericarditis, malformations, etc.
-9. **08 Alterações do Tórax** - Atelectasis, malformations, etc.
+1. 00 Anatomia Normal
+2. 01 Processos Inflamatórios Pulmonares (Pneumonia)
+3. 02 Maior Densidade (Derrame Pleural, Consolidação Atelectasica, Hidrotorax, Empiema)
+4. 03 Menor Densidade (Pneumotorax, Pneumomediastino, Pneumoperitonio)
+5. 04 Doenças Pulmonares Obstrutivas (Enfisema, Broncopneumonia, Bronquiectasia, Embolia)
+6. 05 Doenças Infecciosas Degenerativas (Tuberculose, Sarcoidose, Proteinose, Fibrose)
+7. 06 Lesões Encapsuladas (Abscessos, Nódulos, Cistos, Massas Tumorais, Metastases)
+8. 07 Alterações de Mediastino (Pericardite, Malformações Arteriovenosas, Linfonodomegalias)
+9. 08 Alterações do Tórax (Atelectasias, Malformações, Agenesia, Hipoplasias)
 
 ## 🎯 Usage Instructions
 
@@ -218,9 +271,11 @@ with open('xray.jpg', 'rb') as f:
 
 - **Input Validation**: All uploaded files are validated
 - **Error Handling**: Comprehensive error handling
+- **Authentication**: JWT helpers and auth endpoints provided; protect sensitive routes in production
 - **Rate Limiting**: Consider implementing rate limiting for production
-- **Authentication**: Add user authentication for production use
 - **HTTPS**: Use HTTPS in production
+
+Note: Uploaded images are stored in `uploads/`. Ensure proper storage policies in production.
 
 ## 🚀 Deployment
 
