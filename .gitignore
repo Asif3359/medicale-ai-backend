@@ -43,3 +43,5 @@ archive/
 # If you want to track large model files, consider Git LFS instead of Git
 # and remove the above pattern.
 
+.env
+app/config.py

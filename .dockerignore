@@ -1,0 +1,25 @@
+# VCS & OS
+.git
+.gitignore
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local env and data
+.env
+uploads/
+
+# Not needed in image
+*.ipynb
+training_history.png
+confusion_matrix.png
+static/*.map
+
+
