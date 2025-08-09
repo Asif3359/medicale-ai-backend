@@ -41,7 +41,8 @@ class PredictionResult(Document):
     user_email: Optional[str] = None
 
     # Image info
-    image_filename: str
+    image_filename: Optional[str] = None
+    image_url: Optional[str] = None
     image_size: tuple[int, int]
 
     # Prediction results
@@ -101,6 +102,7 @@ class PredictionResponse(BaseModel):
     all_predictions: dict[str, float]
     processing_time: float
     created_at: datetime
+    image_url: Optional[str] = None
 
     class Config:
         arbitrary_types_allowed = True

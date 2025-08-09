@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from typing import Optional
@@ -19,6 +19,7 @@ from app.models.models import (
     TokenResponse,
 )
 from app.config import UPLOAD_DIR
+from app.services.cloudinary_service import upload_image_bytes
 import os
 from bson import ObjectId
 
@@ -91,21 +92,20 @@ async def predict_disease(
         user_name = user_name or None
         user_email = user_email or None
 
-        # Optionally persist uploaded image for preview
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        saved_path = None
-        if file and file.filename:
-            # Prefix with timestamp to avoid collisions
-            from datetime import datetime as _dt
-            safe_name = f"{_dt.now().strftime('%Y%m%d%H%M%S%f')}_{file.filename}"
-            saved_path = os.path.join(UPLOAD_DIR, safe_name)
-            with open(saved_path, "wb") as f:
-                f.write(image_data)
+        # Upload to Cloudinary instead of saving to local disk
+        image_url = None
+        try:
+            if file and file.filename:
+                image_url, public_id = upload_image_bytes(image_data, filename=file.filename)
+        except Exception as cloud_err:
+            # If Cloudinary is not configured or fails, proceed without image_url
+            image_url = None
 
         prediction_record = PredictionResult(
             user_name=user_name,
             user_email=user_email,
-            image_filename=os.path.basename(saved_path) if saved_path else file.filename,
+            image_filename=None,
+            image_url=image_url,
             image_size=prediction_result["original_size"],
             predicted_class=DiseaseClass(prediction_result["predicted_class"]),
             confidence_score=prediction_result["confidence_score"],
@@ -133,6 +133,7 @@ async def predict_disease(
             all_predictions=prediction_result["all_predictions"],
             processing_time=prediction_result["processing_time"],
             created_at=prediction_record.created_at,
+            image_url=image_url,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
@@ -171,6 +172,7 @@ async def list_predictions(
             all_predictions=p.all_predictions,
             processing_time=p.processing_time,
             created_at=p.created_at,
+            image_url=getattr(p, "image_url", None),
         )
         for p in items
     ]
@@ -197,6 +199,7 @@ async def list_predictions_by_email(email: str, skip: int = 0, limit: int = 50):
             all_predictions=p.all_predictions,
             processing_time=p.processing_time,
             created_at=p.created_at,
+            image_url=getattr(p, "image_url", None),
         )
         for p in items
     ]
@@ -204,21 +207,29 @@ async def list_predictions_by_email(email: str, skip: int = 0, limit: int = 50):
 
 @app.get("/predictions/{prediction_id}/image")
 async def get_prediction_image(prediction_id: str):
-    """Return the uploaded image file for a given prediction id if available."""
+    """Return the uploaded image file for a given prediction id if available.
+
+    If stored on Cloudinary, redirect to the secure URL. Local fallback kept for legacy.
+    """
     try:
         obj_id = ObjectId(prediction_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid prediction id")
 
     pred = await PredictionResult.get(obj_id)
-    if not pred or not pred.image_filename:
+    if not pred:
         raise HTTPException(status_code=404, detail="Image not found")
 
-    path = os.path.join(UPLOAD_DIR, pred.image_filename)
-    if not os.path.isfile(path):
-        raise HTTPException(status_code=404, detail="Image file missing")
+    if getattr(pred, "image_url", None):
+        return RedirectResponse(url=pred.image_url)
 
-    return FileResponse(path)
+    if getattr(pred, "image_filename", None):
+        path = os.path.join(UPLOAD_DIR, pred.image_filename)
+        if not os.path.isfile(path):
+            raise HTTPException(status_code=404, detail="Image file missing")
+        return FileResponse(path)
+
+    raise HTTPException(status_code=404, detail="Image not found")
 
 
 @app.get("/health")
