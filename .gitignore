@@ -44,4 +44,4 @@ archive/
 # and remove the above pattern.
 
 .env
-app/config.py
+app/config.py!best_lung_disease_model.h5
