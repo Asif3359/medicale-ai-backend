@@ -8,6 +8,7 @@ from pathlib import Path
 from app.db.database import db
 from app.services.ml_model import predictor
 from app.services.security import hash_password, verify_password, create_access_token
+from app.services.storage import storage_service
 from app.models.models import (
     PredictionResult,
     User,
@@ -92,20 +93,17 @@ async def predict_disease(
         user_name = user_name or None
         user_email = user_email or None
 
-        # Upload to Cloudinary instead of saving to local disk
-        image_url = None
-        try:
-            if file and file.filename:
-                image_url, public_id = upload_image_bytes(image_data, filename=file.filename)
-        except Exception as cloud_err:
-            # If Cloudinary is not configured or fails, proceed without image_url
-            image_url = None
+        # Upload image to storage (Cloudinary in production, local in development)
+        storage_path, cloudinary_url = await storage_service.upload_image(
+            image_data, 
+            file.filename or "uploaded_image.jpg"
+        )
 
         prediction_record = PredictionResult(
             user_name=user_name,
             user_email=user_email,
-            image_filename=None,
-            image_url=image_url,
+            image_filename=storage_path,
+            image_url=cloudinary_url,
             image_size=prediction_result["original_size"],
             predicted_class=DiseaseClass(prediction_result["predicted_class"]),
             confidence_score=prediction_result["confidence_score"],
@@ -133,7 +131,7 @@ async def predict_disease(
             all_predictions=prediction_result["all_predictions"],
             processing_time=prediction_result["processing_time"],
             created_at=prediction_record.created_at,
-            image_url=image_url,
+            image_url=cloudinary_url,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
@@ -180,6 +178,8 @@ async def list_predictions(
 
 @app.get("/user/{email}/predictions", response_model=list[PredictionResponse])
 async def list_predictions_by_email(email: str, skip: int = 0, limit: int = 50):
+    # Temporary logging to debug multiple requests
+    print(f"🔍 Request for user predictions: {email} (skip={skip}, limit={limit})")
     if limit > 100:
         limit = 100
 

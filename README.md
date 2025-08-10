@@ -76,7 +76,14 @@ MODEL_PATH=best_lung_disease_model.h5
 JWT_SECRET=change-me-in-prod
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 
-# File storage
+# File Storage - Cloudinary (Production)
+# Get these from https://cloudinary.com/console
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+CLOUDINARY_FOLDER=medical-ai/uploads
+
+# Legacy local storage (fallback)
 UPLOAD_DIR=uploads
 
 # Server
@@ -84,6 +91,19 @@ HOST=0.0.0.0
 PORT=8000
 ENVIRONMENT=development
 ```
+
+#### Cloudinary Setup (Optional for Production)
+
+1. **Sign up**: Go to [Cloudinary](https://cloudinary.com/) and create a free account
+2. **Get credentials**: From your dashboard, copy:
+   - Cloud Name
+   - API Key  
+   - API Secret
+3. **Update .env**: Replace the placeholder values with your actual Cloudinary credentials
+4. **Benefits**: 
+   - Images stored in the cloud (no local disk space needed)
+   - Automatic CDN and optimization
+   - Works on serverless platforms like Render
 
 ### 4. Run the Application
 
@@ -298,6 +318,7 @@ CMD ["python", "main.py"]
 
 - [ ] Set up MongoDB with authentication
 - [ ] Configure environment variables
+- [ ] Set up Cloudinary for image storage (recommended)
 - [ ] Set up HTTPS/SSL
 - [ ] Implement rate limiting
 - [ ] Add monitoring and logging
